@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Café 70 - Menú Digital</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                cafe: {
+                  principal: '#fdfbf7',
+                  tarjeta: '#ffffff',
+                  acento: '#bc964a',
+                  texto: '#3a2a1d',
+                  mutado: '#7c6a5c',
+                  bgPromo: '#fffdf9'
+                }
+              },
+              fontFamily: {
+                sans: ['Poppins', 'sans-serif'],
+                titulo: ['Playfair Display', 'serif'],
+              }
+            }
+          }
+        }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        html { scroll-behavior: smooth; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scroll-width: none; }
+    </style>
+</head>
+<body class="bg-cafe-principal text-cafe-texto min-h-screen flex flex-col antialiased">
+
+    <header id="main-header" class="bg-cafe-principal fixed top-0 left-0 w-full z-50 shadow-sm border-b border-stone-200/80 transition-transform duration-300 ease-out will-change-transform">
+        <div id="top-info-block" class="bg-cafe-principal px-4 pt-6 pb-2 max-w-4xl mx-auto w-full text-cafe-acento text-xs md:text-sm">
+            <div class="flex flex-col md:flex-row gap-4 justify-between items-center border-b border-stone-200 pb-5">
+                <div class="w-24 h-24 flex-shrink-0 flex items-center justify-center">
+                    <img src="assets/logo_cafe70.webp" alt="Logo Cafetería 70" class="w-full h-full object-contain" onerror="this.src='https://via.placeholder.com/150/fdfbf7/bc964a?text=Café+70';">
+                </div>
+                <div class="text-center space-y-0.5 flex-1">
+                    <p class="font-medium">lunes a viernes de 8:00 a 17:30</p>
+                    <p class="font-medium">sábado de 8:30 a 17:00</p>
+                    <p class="font-medium text-cafe-mutado text-xs">Servico a domicilio costo extra de 10%</p>
+                    <p class="font-medium text-cafe-mutado text-xs">Aceptamos todas las tarjetas</p>
+                </div>
+                <div class="text-center md:text-right text-xs text-cafe-mutado space-y-0.5">
+                    <p class="font-semibold text-cafe-acento">Transferencias BANAMEX: 002180701767029800</p>
+                    <p class="italic">Sra. María Elena Garcia</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="categories-nav" class="max-w-4xl mx-auto flex gap-6 overflow-x-auto py-3.5 px-4 no-scrollbar justify-start items-center bg-cafe-principal">
+        </div>
+    </header>
+
+    <div id="header-spacer" class="w-full transition-all duration-300"></div>
+
+    <div id="loading-state" class="flex-1 flex flex-col items-center justify-center py-20">
+        <div class="animate-spin rounded-full h-9 w-9 border-b-2 border-cafe-acento mb-3"></div>
+        <p class="text-cafe-mutado text-xs font-medium">Sincronizando menú...</p>
+    </div>
+
+    <div id="promos-container" class="max-w-4xl mx-auto px-4 pt-6 pb-4 w-full hidden">
+        <h2 class="font-titulo text-2xl md:text-3xl text-cafe-texto text-center mb-6 font-bold tracking-tight">
+            Promos de lunes a sábado
+        </h2>
+        <div id="promos-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        </div>
+        <h3 class="font-titulo text-base md:text-base text-cafe-texto text-center mb-6 font-bold tracking-tight">
+            Por solo $15 cambia tu café por un Capuchino o Latte
+        </h3>
+    </div>
+
+    <main id="menu-container" class="max-w-4xl mx-auto px-4 py-4 w-full flex-1 hidden">
+    </main>
+
+    <footer class="py-8 text-center text-xs text-cafe-mutado border-t border-stone-200 bg-cafe-principal mt-auto">
+        <p>© Café 70. Todos los derechos reservados.</p>
+    </footer>
+
+    <a href="https://wa.me/525528455815" target="_blank" class="fixed bottom-6 right-6 w-14 h-14 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-xl z-50 hover:scale-110 transition-transform duration-300" title="Pedir por WhatsApp">
+        <i class="fa-brands fa-whatsapp text-3xl"></i>
+    </a>
+
+    <script>
+        const SHEET_ID = '1tTDmPxroTBSAle0w0UyLULRXCMOJTJwq8RNUpvPcP_Q';
+        const GID = '1997124190';
+        const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`;
+
+        let isHeaderCollapsed = false;
+        let isProgrammaticScrolling = false;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchMenuData();
+            initSmartHeader();
+        });
+
+        function initSmartHeader() {
+            let lastScrollY = window.scrollY;
+            const mainHeader = document.getElementById('main-header');
+            const topInfoBlock = document.getElementById('top-info-block');
+            const spacer = document.getElementById('header-spacer');
+
+            function ajustarEspaciador() {
+                spacer.style.height = mainHeader.offsetHeight + 'px';
+            }
+            setTimeout(ajustarEspaciador, 400);
+            window.addEventListener('resize', ajustarEspaciador);
+
+            window.addEventListener('scroll', () => {
+                if (isProgrammaticScrolling) return;
+
+                const currentScrollY = window.scrollY;
+                const delta = currentScrollY - lastScrollY;
+                const infoHeight = topInfoBlock.offsetHeight;
+
+                if (Math.abs(delta) < 10 || currentScrollY < 0) return;
+
+                if (delta > 0 && currentScrollY > infoHeight) {
+                    if (!isHeaderCollapsed) {
+                        mainHeader.style.transform = `translateY(-${infoHeight}px)`;
+                        isHeaderCollapsed = true;
+                    }
+                } else if (delta < 0) {
+                    if (isHeaderCollapsed) {
+                        mainHeader.style.transform = 'translateY(0)';
+                        isHeaderCollapsed = false;
+                    }
+                }
+                lastScrollY = currentScrollY;
+            }, { passive: true });
+        }
+
+        function fetchMenuData() {
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: results => procesarYRenderizar(results.data),
+                error: () => mostrarErrorHTML()
+            });
+        }
+
+        function limpiarClave(key) {
+            return key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        }
+
+        function procesarYRenderizar(filas) {
+            if (!filas || filas.length === 0) return;
+
+            const menuAgrupado = {};
+            const listaPromos = [];
+            
+            // --- NUEVO SISTEMA DE NOTAS DINÁMICAS ---
+            const notasPorCategoria = {}; 
+            let ultimaCategoriaActiva = ''; 
+
+            filas.forEach(row => {
+                const f = {};
+                for (let key in row) f[limpiarClave(key)] = row[key] ? row[key].toString().trim() : '';
+
+                if (f.estado.toLowerCase() !== 'activo' || !f.nombre) return;
+
+                // DETECCIÓN DE "EXTRAS" Y "NOTAS" DESDE EXCEL
+                if (f.categoria.toLowerCase().includes('extra') || f.categoria.toLowerCase().includes('nota')) {
+                    if (ultimaCategoriaActiva) {
+                        if (!notasPorCategoria[ultimaCategoriaActiva]) {
+                            notasPorCategoria[ultimaCategoriaActiva] = [];
+                        }
+                        
+                        // Armar el texto bonito de la nota
+                        let textoExtra = f.nombre;
+                        if (f.descripcion) textoExtra += ` - ${f.descripcion}`;
+                        if (f.precio) textoExtra += ` (+${formatearPrecio(f.precio)})`;
+                        
+                        notasPorCategoria[ultimaCategoriaActiva].push(textoExtra);
+                    }
+                    return; // No lo procesamos como producto ni creamos una categoría nueva
+                }
+
+                if (f.categoria.toLowerCase().includes('promo')) {
+                    listaPromos.push({
+                        nombre: f.nombre,
+                        descripcion: f.descripcion,
+                        precio: f.precio
+                    });
+                    return;
+                }
+
+                // Guardamos en memoria cuál es la categoría en la que estamos trabajando
+                ultimaCategoriaActiva = f.categoria;
+
+                if (!menuAgrupado[f.categoria]) menuAgrupado[f.categoria] = {};
+                if (!menuAgrupado[f.categoria][f.nombre]) {
+                    menuAgrupado[f.categoria][f.nombre] = {
+                        nombre: f.nombre,
+                        descripcion: f.descripcion,
+                        imagen: f.imagen,
+                        variaciones: []
+                    };
+                }
+                menuAgrupado[f.categoria][f.nombre].variaciones.push({
+                    tamano: f.tamano,
+                    variante: f.variantes || f.variante,
+                    precio: f.precio
+                });
+            });
+
+            construirInterfaz(listaPromos, menuAgrupado, notasPorCategoria);
+        }
+
+        // Pasamos el nuevo objeto notasPorCategoria a la interfaz
+        function construirInterfaz(promos, menuAgrupado, notasPorCategoria) {
+            const navContainer = document.getElementById('categories-nav');
+            const menuContainer = document.getElementById('menu-container');
+            const promosContainer = document.getElementById('promos-container');
+            const promosGrid = document.getElementById('promos-grid');
+            const loadingState = document.getElementById('loading-state');
+
+            navContainer.innerHTML = '';
+            menuContainer.innerHTML = '';
+            promosGrid.innerHTML = '';
+
+            if (promos.length > 0) {
+                promosContainer.classList.remove('hidden');
+                promos.forEach(p => {
+                    const card = document.createElement('div');
+                    card.className = "bg-cafe-bgPromo border-2 border-cafe-acento/30 rounded-2xl p-5 flex flex-col justify-between shadow-sm relative overflow-hidden transition-all duration-300 hover:border-cafe-acento/60 min-h-[130px]";
+                    card.innerHTML = `
+                        <div class="absolute top-0 left-0 bg-cafe-acento text-white font-bold text-[9px] tracking-widest px-3 py-1 rounded-br-xl uppercase">
+                            PROMO
+                        </div>
+                        <div class="mt-3 flex-1 min-w-0">
+                            <h3 class="font-bold text-base md:text-lg text-cafe-texto leading-tight break-words">${p.nombre}</h3>
+                            ${p.descripcion ? `<p class="text-xs text-cafe-mutado mt-1 leading-relaxed italic break-words">${p.descripcion}</p>` : ''}
+                        </div>
+                        <div class="flex justify-end items-center mt-3 flex-shrink-0">
+                            <span class="text-cafe-acento font-bold text-base md:text-lg bg-white px-3 py-0.5 rounded-lg border border-stone-200 shadow-sm">
+                                ${formatearPrecio(p.precio)}
+                            </span>
+                        </div>
+                    `;
+                    promosGrid.appendChild(card);
+                });
+            }
+
+            const categories = Object.keys(menuAgrupado);
+            if (promos.length > 0) {
+                categories.unshift('Promociones');
+            }
+
+            categories.forEach((categoria, index) => {
+                const catId = `seccion-${index}`;
+
+                const btn = document.createElement('button');
+                btn.className = `pb-2 text-xs font-semibold whitespace-nowrap transition-all border-b-2 tracking-wide uppercase ${
+                    index === 0
+                    ? 'border-cafe-acento text-cafe-texto font-bold'
+                    : 'border-transparent text-cafe-mutado hover:text-cafe-texto'
+                }`;
+                btn.innerText = categoria;
+
+                btn.onclick = () => {
+                    document.querySelectorAll('#categories-nav button').forEach(b => {
+                        b.className = 'pb-2 text-xs font-semibold whitespace-nowrap transition-all border-b-2 border-transparent text-cafe-mutado hover:text-cafe-texto tracking-wide uppercase';
+                    });
+                    btn.className = 'pb-2 text-xs font-semibold whitespace-nowrap transition-all border-b-2 border-cafe-acento text-cafe-texto font-bold tracking-wide uppercase';
+
+                    isProgrammaticScrolling = true;
+
+                    const target = (categoria === 'Promociones') ? promosContainer : document.getElementById(catId);
+                    const mainHeader = document.getElementById('main-header');
+                    const topInfoBlock = document.getElementById('top-info-block');
+
+                    const visibleHeaderHeight = mainHeader.offsetHeight - (isHeaderCollapsed ? topInfoBlock.offsetHeight : 0);
+                    const targetPosition = target.getBoundingClientRect().top + window.pageYOffset - visibleHeaderHeight - 15;
+
+                    window.scrollTo({ top: targetPosition, behavior: "smooth" });
+
+                    setTimeout(() => { isProgrammaticScrolling = false; }, 800);
+                };
+                navContainer.appendChild(btn);
+
+                if (categoria !== 'Promociones') {
+                    const seccion = document.createElement('section');
+                    seccion.id = catId;
+                    seccion.className = "mb-10 pt-4";
+
+                    const listaProductos = Object.values(menuAgrupado[categoria]);
+
+                    let leyendaHTML = '';
+                    const catNorm = limpiarClave(categoria);
+                    
+                    // Notas fijas (Crepas y Alimentos)
+                    if (catNorm.includes('crepa')) {
+                        leyendaHTML += `<p class="text-xs text-cafe-acento font-semibold mb-3 tracking-wide uppercase flex items-center gap-1.5"><i class="fa-solid fa-clock"></i> Desde las 3:00 pm hasta el cierre</p>`;
+                    } else if (catNorm.includes('alimentos preparados')) {
+                        leyendaHTML += `<p class="text-xs text-cafe-acento font-semibold mb-3 tracking-wide uppercase flex items-center gap-1.5"><i class="fa-solid fa-clock"></i> Hamburguesas y papas a la francesa desde las 12:00 pm</p>`;
+                    }
+
+                    // --- INSERTAR NOTAS DINÁMICAS DE EXCEL ---
+                    if (notasPorCategoria && notasPorCategoria[categoria]) {
+                        notasPorCategoria[categoria].forEach(nota => {
+                            leyendaHTML += `<p class="text-xs text-cafe-acento font-semibold mb-3 tracking-wide uppercase flex items-center gap-1.5"><i class="fa-solid fa-plus"></i> ${nota}</p>`;
+                        });
+                    }
+
+                    seccion.innerHTML = `
+                        <h2 class="font-titulo text-xl text-cafe-texto border-b border-stone-200 pb-2 ${leyendaHTML ? 'mb-2' : 'mb-4'} tracking-wide uppercase font-bold">
+                            ${categoria}
+                        </h2>
+                        ${leyendaHTML}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${listaProductos.map(item => {
+                                const tieneImagen = item.imagen && item.imagen.trim().startsWith('http');
+
+                                let preciosHTML = '';
+                                if (item.variaciones.length === 1 && !item.variaciones[0].tamano && !item.variaciones[0].variante) {
+                                    preciosHTML = `<span class="text-cafe-acento font-bold text-base whitespace-nowrap pt-0.5">${formatearPrecio(item.variaciones[0].precio)}</span>`;
+                                } else {
+                                    preciosHTML = `
+                                        <div class="flex flex-col gap-2 text-right items-end flex-shrink-0 max-w-[55%] md:max-w-[60%]">
+                                            ${item.variaciones.map(v => {
+                                                let etiqueta = v.tamano && v.variante ? `${v.tamano} / ${v.variante}` : (v.tamano || v.variante || '');
+                                                return `
+                                                    <div class="flex items-start gap-2 justify-end w-full">
+                                                        ${etiqueta ? `
+                                                            <span class="text-[10px] tracking-wide bg-stone-100 text-cafe-mutado px-2 py-0.5 rounded border border-stone-200 font-medium text-right whitespace-normal break-words leading-relaxed">
+                                                                ${etiqueta}
+                                                            </span>
+                                                        ` : ''}
+                                                        <span class="text-cafe-acento font-bold text-sm md:text-base whitespace-nowrap pt-0.5">${formatearPrecio(v.precio)}</span>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    `;
+                                }
+
+                                return `
+                                    <div class="bg-cafe-tarjeta border border-stone-200/60 rounded-xl p-4 flex gap-4 shadow-sm items-start">
+                                        ${tieneImagen ? `
+                                            <div class="w-20 h-20 md:w-24 md:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-stone-100 self-center">
+                                                <img src="${item.imagen.trim()}" alt="${item.nombre}" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                                            </div>
+                                        ` : ''}
+                                        <div class="flex-1 min-w-0 flex justify-between items-start gap-2">
+                                            <div class="flex-1 min-w-0">
+                                                <h3 class="font-semibold text-sm md:text-base text-cafe-texto leading-snug break-words">${item.nombre}</h3>
+                                                ${item.descripcion ? `<p class="text-cafe-mutado text-xs leading-relaxed mt-1">${item.descripcion}</p>` : ''}
+                                            </div>
+                                            ${preciosHTML}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                    menuContainer.appendChild(seccion);
+                }
+            });
+
+            loadingState.classList.add('hidden');
+            menuContainer.classList.remove('hidden');
+        }
+
+        function formatearPrecio(precio) {
+            let numero = parseFloat(precio.replace(/[^0-9.-]+/g, ""));
+            if (isNaN(numero)) return precio;
+            return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(numero);
+        }
+
+        function mostrarErrorHTML() {
+            const loadingState = document.getElementById('loading-state');
+            loadingState.innerHTML = `
+                <div class="text-center p-6 max-w-sm bg-white border border-red-200 rounded-2xl mx-4 shadow-sm">
+                    <span class="text-3xl">⚠️</span>
+                    <h3 class="text-base font-semibold mt-3 text-red-600">Aviso del Menú</h3>
+                    <p class="text-cafe-mutado text-xs mt-2 leading-relaxed">Hubo un problema al conectar con tu Google Sheet.</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
